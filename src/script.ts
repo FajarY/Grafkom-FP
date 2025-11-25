@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { MathUtils } from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+import { loadGLTF, loadFBX, loadOBJ } from "./loader.js";
 
 const controls = {
     moveForward: false,
@@ -13,7 +14,7 @@ const controls = {
 
 let clock: THREE.Clock;
 
-const speed = 0.05;
+const speed = 0.025;
 
 let deltaTime: number;
 let accumulatedTime: number = 0.0;
@@ -22,7 +23,15 @@ let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let pointerLockControls: PointerLockControls;
 
-function init() {
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const draggableObjects: THREE.Object3D[] = [];
+let selectedObject: THREE.Object3D | null = null;
+const dragOffset = new THREE.Vector3();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let isPointerDownForDrag = false;
+
+async function init() {
     clock = new THREE.Clock();
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x3cb0fa);
@@ -33,8 +42,8 @@ function init() {
     const far = 1000;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera.position.set(0.0, 6.0, 10.0);
-    camera.lookAt(new THREE.Vector3(-5, 5, 0));
+    camera.position.set(1.5, 1.5, 1.5);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -65,6 +74,50 @@ function init() {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("resize", onWindowResize);
+
+    // Right click locks/unlocks pointer (keep your existing behavior)
+    document.body.addEventListener("pointerdown", (event) => {
+        if (event.button === 2) {
+            pointerLockControls.lock();
+        }
+    });
+    document.body.addEventListener("pointerup", (event) => {
+        if (event.button === 2) {
+            pointerLockControls.unlock();
+        }
+    });
+
+    // Add left-click drag handlers (only when pointer NOT locked)
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+
+    await setupKitchen();
+
+    animate();
+}
+
+async function setupKitchen()
+{
+    const table = await loadFBX("table.fbx");
+    table.scale.setScalar(0.01);
+    table.position.set(0.0, 0.5, 0.0);
+    scene.add(table);
+
+    const knife = await loadGLTF("source/knife2.glb");
+    knife.scale.setScalar(0.25);
+    knife.position.set(0.20, 1.05, -0.20);
+    knife.rotateX(MathUtils.degToRad(90.0));
+    knife.rotateZ(MathUtils.degToRad(30.0));
+    scene.add(knife);
+    makeDraggable(knife);
+
+    const plate = await loadGLTF("ceramic_plate_set.glb");
+    const plateSingle = plate.children[0].children[0].children[0].children[1];
+    plateSingle.scale.setScalar(2);
+    plateSingle.position.set(-0.20, 1.05, 0.50);
+    scene.add(plateSingle);
+    makeDraggable(plateSingle);
 }
 
 function addHelperGrid() {
@@ -86,6 +139,87 @@ function addHelperGrid() {
     groundPlane.rotation.x = Math.PI / 2;
     groundPlane.position.y = -0.01;
     scene.add(groundPlane);
+}
+
+
+/* mark object as draggable (call after object is added to scene) */
+function makeDraggable(obj: THREE.Object3D) {
+    draggableObjects.push(obj);
+}
+
+/* ---------- Drag event handlers ---------- */
+function getMouseNDCCoords(event: PointerEvent) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+}
+
+function findTopDraggableAncestor(obj: THREE.Object3D): THREE.Object3D {
+    // climb parents until we find an object that is directly in draggableObjects
+    let current: THREE.Object3D | null = obj;
+    while (current) {
+        if (draggableObjects.includes(current)) return current;
+        current = current.parent;
+    }
+    return obj;
+}
+
+function onPointerDown(event: PointerEvent) {
+    // only allow dragging with left button and when pointer is NOT locked
+    if (pointerLockControls.isLocked) return;
+    if (event.button !== 0) return;
+
+    isPointerDownForDrag = true;
+    getMouseNDCCoords(event);
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(draggableObjects, true);
+    console.log(intersects);
+
+    if (intersects.length > 0) {
+        const topIntersect = intersects[0];
+        const topObject = findTopDraggableAncestor(topIntersect.object);
+        selectedObject = topObject;
+
+        // set a drag plane at the object's current world Y position
+        // plane equation: normal (0,1,0), constant = -y
+        const worldPos = new THREE.Vector3();
+        selectedObject.getWorldPosition(worldPos);
+        dragPlane.set(new THREE.Vector3(0, 1, 0), -worldPos.y);
+
+        // compute offset: intersection point on plane - object's world position
+        const intersectionPoint = new THREE.Vector3();
+        raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
+        dragOffset.copy(intersectionPoint).sub(worldPos);
+
+        document.body.style.cursor = "grabbing";
+    }
+}
+
+function onPointerMove(event: PointerEvent) {
+    if (!isPointerDownForDrag || !selectedObject) return;
+    getMouseNDCCoords(event);
+    raycaster.setFromCamera(mouse, camera);
+
+    const intersectionPoint = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(dragPlane, intersectionPoint)) {
+        // compute new world position (intersection - offset)
+        const newWorldPos = intersectionPoint.clone().sub(dragOffset);
+
+        // If selectedObject has parent transforms, convert world position to parent's local space
+        if (selectedObject.parent) {
+            const parentInv = new THREE.Matrix4().copy(selectedObject.parent.matrixWorld).invert();
+            newWorldPos.applyMatrix4(parentInv);
+        }
+        // only change X and Z to keep height stable
+        selectedObject.position.x = newWorldPos.x;
+        selectedObject.position.z = newWorldPos.z;
+    }
+}
+
+function onPointerUp(event: PointerEvent) {
+    if (event.button !== 0) return;
+    isPointerDownForDrag = false;
+    selectedObject = null;
+    document.body.style.cursor = "auto";
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -199,4 +333,3 @@ function appendObj(
 }
 
 init();
-animate();
