@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",                /* Tentukan versi ECMAScript target. */
+    "module": "ESNext",                /* Tentukan sistem modul yang dihasilkan. */
+    "rootDir": "./src",                /* Tentukan direktori root file input. */
+    "outDir": "./dist",                /* Tentukan direktori untuk output. */
+    "esModuleInterop": true,           /* Aktifkan interop untuk modul CommonJS. */
+    "strict": true,                    /* Aktifkan semua pemeriksaan tipe ketat. */
+    "skipLibCheck": true,              /* Lewati pemeriksaan tipe file deklarasi. */
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "bundler",
+  },
+  "include": ["src/**/*.ts"]
+}
