@@ -3,6 +3,32 @@ import { MathUtils } from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { loadGLTF, loadFBX, loadOBJ } from "./loader.js";
 
+type PlaceableUserData =
+{
+    placeOffset: THREE.Vector3,
+    placedObject: THREE.Object3D[],
+    lastPlaceObjectPos: THREE.Vector3[]
+};
+type AddPlaceableUserData =
+{
+    placeOffset: THREE.Vector3
+};
+type SelectedUserData =
+{
+    placedOn: THREE.Object3D | null;
+};
+type InteractableUserData = 
+{
+    interactInfo: string,
+    onInteract: (obj: THREE.Object3D) => void;
+};
+type GameObjectData =
+{
+    placeableData: PlaceableUserData | null,
+    selectableData: SelectedUserData | null,
+    interactableData: InteractableUserData | null
+};
+
 const controls = {
     moveForward: false,
     moveBackward: false,
@@ -14,7 +40,7 @@ const controls = {
 
 let clock: THREE.Clock;
 
-const speed = 0.025;
+const speed = 0.005;
 
 let deltaTime: number;
 let accumulatedTime: number = 0.0;
@@ -24,12 +50,20 @@ let renderer: THREE.WebGLRenderer;
 let pointerLockControls: PointerLockControls;
 
 const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
 const draggableObjects: THREE.Object3D[] = [];
+const placeableObjects: THREE.Object3D[] = [];
+const interactableObjects: THREE.Object3D[] = [];
 let selectedObject: THREE.Object3D | null = null;
-const dragOffset = new THREE.Vector3();
-const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-let isPointerDownForDrag = false;
+let currentPlaceableObject: THREE.Object3D | null = null;
+let selectedObjectLastPosition: THREE.Vector3;
+let selectedObjectLastQuaternion: THREE.Euler;
+let isMovingSelectedObject = false;
+let interactingObject: THREE.Object3D | null = null;
+
+let debugDiv: HTMLDivElement;
+let handCursorDiv: HTMLDivElement;
+let interactionPromptDiv: HTMLDivElement;
+let lockPromptDiv: HTMLDivElement;
 
 async function init() {
     clock = new THREE.Clock();
@@ -60,41 +94,180 @@ async function init() {
 
     pointerLockControls = new PointerLockControls(camera, document.body);
     scene.add(pointerLockControls.object);
-
-    document.body.addEventListener("pointerdown", (event) => {
-        if (event.button === 2) {
-            pointerLockControls.lock();
-        }
-    });
-    document.body.addEventListener("pointerup", (event) => {
-        if (event.button === 2) {
-            pointerLockControls.unlock();
-        }
-    });
+    
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("resize", onWindowResize);
-
-    // Right click locks/unlocks pointer (keep your existing behavior)
-    document.body.addEventListener("pointerdown", (event) => {
-        if (event.button === 2) {
-            pointerLockControls.lock();
-        }
-    });
-    document.body.addEventListener("pointerup", (event) => {
-        if (event.button === 2) {
-            pointerLockControls.unlock();
-        }
-    });
-
-    // Add left-click drag handlers (only when pointer NOT locked)
+    
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+
+    setupUI();
 
     await setupKitchen();
 
     animate();
+}
+
+function setupUI() {
+    debugDiv = document.createElement('div');
+
+    debugDiv.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        color: #00ff00;
+        font-family: monospace;
+        font-size: 14px;
+        padding: 10px;
+        pointer-events: none;
+        user-select: none;
+        white-space: pre;
+        z-index: 1000;
+        min-width: 200px;
+    `;
+    document.body.appendChild(debugDiv);
+
+    handCursorDiv = document.createElement('div');
+    handCursorDiv.id = 'hand-cursor';
+
+    handCursorDiv.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 48px; /* Example size */
+        height: 48px; /* Example size */
+        background-image: url('hand_icon.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        z-index: 1001; /* Must be above the debug UI */
+        display: none; /* Initially hidden */
+    `;
+
+    document.body.appendChild(handCursorDiv);
+
+    interactionPromptDiv = document.createElement('div');
+    interactionPromptDiv.id = 'interaction-prompt';
+    interactionPromptDiv.innerText = "";
+
+    interactionPromptDiv.style.cssText = `
+        position: absolute;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 18px;
+        padding: 8px 15px;
+        border-radius: 5px;
+        pointer-events: none;
+        user-select: none;
+        z-index: 1002;
+        display: None;
+        letter-spacing: 1px;
+    `;
+
+    document.body.appendChild(interactionPromptDiv);
+
+    lockPromptDiv = document.createElement('div');
+    lockPromptDiv.id = 'lock-prompt';
+    lockPromptDiv.innerText = "Press R to use controls";
+
+    lockPromptDiv.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%); /* Center perfectly */
+        background-color: rgba(255, 255, 255, 0.9);
+        color: #111111;
+        font-family: Arial, sans-serif;
+        font-size: 24px;
+        font-weight: bold;
+        padding: 20px 30px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        pointer-events: none; /* Crucial: ensures it doesn't block the screen */
+        user-select: none;
+        z-index: 2000; /* Highest z-index to be clearly visible */
+        display: block; /* Initially visible */
+    `;
+
+    document.body.appendChild(lockPromptDiv);
+}
+
+function updateUI() {
+    if (debugDiv)
+    {
+        const camPos = camera.position;
+        const selectedName = selectedObject ? (selectedObject.name || selectedObject.uuid.slice(0, 8)) : "None";
+        const placeableName = currentPlaceableObject ? (currentPlaceableObject.name || currentPlaceableObject.uuid.slice(0, 8)) : "None";
+        const interactingName = interactingObject ? (interactingObject.name || interactingObject.uuid.slice(0, 8)) : "None";
+
+        const text = `
+=== DEBUG INFO ===
+FPS: ${(1 / deltaTime).toFixed(1)}
+Time: ${clock.getElapsedTime().toFixed(2)}s
+
+[ Camera ]
+X: ${camPos.x.toFixed(2)}
+Y: ${camPos.y.toFixed(2)}
+Z: ${camPos.z.toFixed(2)}
+
+[ Interaction ]
+Dragging: ${isMovingSelectedObject}
+Selected: ${selectedName}
+Placeable: ${placeableName}
+Interacting: ${interactingName}
+    `;
+
+        debugDiv.innerText = text.trim();
+    }
+    if (handCursorDiv)
+    {
+        let show = false;
+        if(!isMovingSelectedObject)
+        {
+            if(selectedObject != null)
+            {
+                handCursorDiv.style.backgroundImage = 'url("hand_icon.svg")'
+                handCursorDiv.style.width = '40px';
+                handCursorDiv.style.height = '40px';
+                show = true;
+            }
+        }
+        else
+        {
+            if(currentPlaceableObject != null)
+            {
+                handCursorDiv.style.backgroundImage = 'url("correct_icon.svg")'
+                handCursorDiv.style.width = '40px';
+                handCursorDiv.style.height = '40px';
+                show = true;
+            }
+            else
+            {
+                handCursorDiv.style.backgroundImage = 'url("no_icon.svg")'
+                handCursorDiv.style.width = '30px';
+                handCursorDiv.style.height = '30px';
+                show = true;
+            }
+        }
+
+        handCursorDiv.style.display = show ? 'block' : 'none';
+    }
+    if(interactionPromptDiv)
+    {
+        interactionPromptDiv.style.display = interactingObject ? 'block' : 'none';
+        interactionPromptDiv.innerText = `Press F to ${interactingObject?.userData.interactableData.interactInfo}`;
+    }
+    if(lockPromptDiv)
+    {
+        lockPromptDiv.style.display = pointerLockControls.isLocked ? 'none' : 'block';
+    }
 }
 
 async function setupKitchen()
@@ -118,6 +291,24 @@ async function setupKitchen()
     plateSingle.position.set(-0.20, 1.05, 0.50);
     scene.add(plateSingle);
     makeDraggable(plateSingle);
+    makePlacable(plateSingle, {
+        placeOffset: new THREE.Vector3(0.0, 0.025, 0.0)
+    })
+
+    makePlacable(table, {
+        placeOffset: new THREE.Vector3(0.0, 0.535, 0.0),
+    });
+
+    makeInteractable(plateSingle, {
+        interactInfo: "interact with Plate",
+        onInteract: (obj) =>
+        {
+            console.log(obj)
+        }
+    })
+
+    addObjOnPlaceableObject(table, knife);
+    addObjOnPlaceableObject(table, plateSingle);
 }
 
 function addHelperGrid() {
@@ -141,20 +332,226 @@ function addHelperGrid() {
     scene.add(groundPlane);
 }
 
+function update()
+{   
+    checkRaycast();
+}
 
-/* mark object as draggable (call after object is added to scene) */
+function checkRaycast()
+{
+    const maxInteractingObjDistance = 2.0;
+    const maxSelectedObjDistance = 2.0;
+    const maxPlaceableObjDistance = 2.0;
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+
+    interactingObject = null;
+    if(!isMovingSelectedObject)
+    {
+        raycaster.set(camera.position, cameraDirection);
+        const draggableIntersects = raycaster.intersectObjects(draggableObjects, true);
+
+        selectedObject = null;
+        for(let i = 0; i < draggableIntersects.length; i++)
+        {
+            const topDraggable = draggableIntersects[0];
+            const topObject = findTopDraggableAncestor(topDraggable.object);
+
+            if(topDraggable.point.distanceTo(camera.position) > maxSelectedObjDistance)
+            {
+                continue;
+            }
+
+            selectedObject = topObject;
+            break;
+        }
+
+        raycaster.set(camera.position, cameraDirection);
+        const interactabeIntersects = raycaster.intersectObjects(interactableObjects, true);
+
+        for(let i = 0; i < interactabeIntersects.length; i++)
+        {
+            const topInteractable = interactabeIntersects[0];
+            const topObject = findTopInteractableAncestor(topInteractable.object);
+
+            if(topInteractable.point.distanceTo(camera.position) > maxInteractingObjDistance)
+            {
+                continue;
+            }
+
+            interactingObject = topObject;
+            break;
+        }
+    }
+    else
+    {
+        if(!selectedObject)
+        {
+            throw new Error("Unknown error");
+        }
+
+        let selectedGoPosition = camera.position.clone().add(cameraDirection.multiplyScalar(1.0));
+
+        raycaster.set(camera.position, cameraDirection);
+        const placeableIntersects = raycaster.intersectObjects(placeableObjects, true);
+
+        currentPlaceableObject = null;
+        let currentIntersectIndex = 0;
+        for(let i = 0; i < placeableIntersects.length; i++)
+        {
+            currentIntersectIndex = i;
+            const currentIntersectRay = placeableIntersects[i];
+            const chooseObj = findTopPlaceableAncestor(currentIntersectRay.object);
+
+            if(currentIntersectRay.point.distanceTo(camera.position) > maxPlaceableObjDistance)
+            {
+                continue;
+            }
+            if(chooseObj.id == selectedObject?.id)
+            {
+                continue;
+            }
+
+            currentPlaceableObject = chooseObj;
+            break;
+        }
+
+        if(currentPlaceableObject != null)
+        {
+            selectedGoPosition = placeableIntersects[currentIntersectIndex].point.clone();
+            selectedGoPosition.y = currentPlaceableObject.position.y;
+
+            selectedGoPosition.add(currentPlaceableObject.userData.placeableData.placeOffset);
+        }
+
+        selectedObject?.position.set(selectedGoPosition.x, selectedGoPosition.y, selectedGoPosition.z);
+
+        recursiveUpdatePlaceableObject(selectedObject);
+    }
+}
+
+function addObjOnPlaceableObject(placeableObj: THREE.Object3D, obj: THREE.Object3D)
+{
+    let selectedData: SelectedUserData = obj.userData.selectableData as SelectedUserData;
+    if(selectedData.placedOn)
+    {
+        throw new Error("Cannot place object on another one again!");
+    }
+
+    let newPlacedOnData : PlaceableUserData = placeableObj.userData.placeableData as PlaceableUserData;
+
+    newPlacedOnData.placedObject.push(obj);
+    newPlacedOnData.lastPlaceObjectPos.push(obj.position.clone().sub(placeableObj.position.clone()));
+
+    selectedData.placedOn = placeableObj;
+}
+function removeObjOnPlaceableObject(obj: THREE.Object3D)
+{
+    let selectedData: SelectedUserData = obj.userData.selectableData as SelectedUserData;
+
+    if(!selectedData.placedOn)
+    {
+        return;
+    }
+    let lastPlaceableData: PlaceableUserData = selectedData.placedOn.userData.placeableData as PlaceableUserData;
+            
+    for(let i = 0; i < lastPlaceableData.placedObject.length; i++)
+    {
+        if(lastPlaceableData.placedObject[i].id == obj.id)
+        {
+            lastPlaceableData.placedObject.splice(i, 1);
+            lastPlaceableData.lastPlaceObjectPos.splice(i, 1);
+            break;
+        }
+    }
+
+    selectedData.placedOn = null;
+}
+
+function recursiveUpdatePlaceableObject(placeableObj: THREE.Object3D)
+{
+    const gameObjData: GameObjectData = placeableObj.userData as GameObjectData;
+
+    if(gameObjData.placeableData)
+    {
+        for(let i = 0; i < gameObjData.placeableData.placedObject.length; i++)
+        {
+            const obj = gameObjData.placeableData.placedObject[i];
+            obj.position.copy(placeableObj.position.clone().add(gameObjData.placeableData.lastPlaceObjectPos[i]));
+
+            recursiveUpdatePlaceableObject(obj);
+        }
+    }
+}
+
 function makeDraggable(obj: THREE.Object3D) {
     draggableObjects.push(obj);
+
+    let gameObj = asGameObject(obj.userData);
+    if(!gameObj)
+    {
+        gameObj = {
+            placeableData: null,
+            selectableData: null,
+            interactableData: null
+        };
+    }
+    gameObj.selectableData = {
+        placedOn: null
+    };
+
+    obj.userData = gameObj;
 }
 
-/* ---------- Drag event handlers ---------- */
-function getMouseNDCCoords(event: PointerEvent) {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+function makePlacable(obj: THREE.Object3D, data: AddPlaceableUserData)
+{
+    placeableObjects.push(obj);
+    let gameObj = asGameObject(obj.userData);
+    if(!gameObj)
+    {
+        gameObj = {
+            placeableData: null,
+            selectableData: null,
+            interactableData: null
+        };
+    }
+
+    gameObj.placeableData = {
+        lastPlaceObjectPos : [],
+        placedObject: [],
+        ...data
+    }
+
+    obj.userData = gameObj;
 }
 
+function makeInteractable(obj: THREE.Object3D, data: InteractableUserData)
+{
+    interactableObjects.push(obj);
+
+    let gameObj = asGameObject(obj.userData);
+    if(!gameObj)
+    {
+        gameObj = {
+            placeableData: null,
+            selectableData: null,
+            interactableData: null
+        };
+    }
+    gameObj.interactableData = data;
+
+    obj.userData = gameObj;
+}
+
+function findTopInteractableAncestor(obj: THREE.Object3D): THREE.Object3D {
+    let current: THREE.Object3D | null = obj;
+    while (current) {
+        if (interactableObjects.includes(current)) return current;
+        current = current.parent;
+    }
+    return obj;
+}
 function findTopDraggableAncestor(obj: THREE.Object3D): THREE.Object3D {
-    // climb parents until we find an object that is directly in draggableObjects
     let current: THREE.Object3D | null = obj;
     while (current) {
         if (draggableObjects.includes(current)) return current;
@@ -162,64 +559,51 @@ function findTopDraggableAncestor(obj: THREE.Object3D): THREE.Object3D {
     }
     return obj;
 }
-
-function onPointerDown(event: PointerEvent) {
-    // only allow dragging with left button and when pointer is NOT locked
-    if (pointerLockControls.isLocked) return;
-    if (event.button !== 0) return;
-
-    isPointerDownForDrag = true;
-    getMouseNDCCoords(event);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(draggableObjects, true);
-    console.log(intersects);
-
-    if (intersects.length > 0) {
-        const topIntersect = intersects[0];
-        const topObject = findTopDraggableAncestor(topIntersect.object);
-        selectedObject = topObject;
-
-        // set a drag plane at the object's current world Y position
-        // plane equation: normal (0,1,0), constant = -y
-        const worldPos = new THREE.Vector3();
-        selectedObject.getWorldPosition(worldPos);
-        dragPlane.set(new THREE.Vector3(0, 1, 0), -worldPos.y);
-
-        // compute offset: intersection point on plane - object's world position
-        const intersectionPoint = new THREE.Vector3();
-        raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
-        dragOffset.copy(intersectionPoint).sub(worldPos);
-
-        document.body.style.cursor = "grabbing";
+function findTopPlaceableAncestor(obj: THREE.Object3D): THREE.Object3D {
+    let current: THREE.Object3D | null = obj;
+    while (current) {
+        if (placeableObjects.includes(current)) return current;
+        current = current.parent;
     }
+    return obj;
 }
 
-function onPointerMove(event: PointerEvent) {
-    if (!isPointerDownForDrag || !selectedObject) return;
-    getMouseNDCCoords(event);
-    raycaster.setFromCamera(mouse, camera);
+function onPointerDown(event: PointerEvent) {
+    if (!pointerLockControls.isLocked) return;
+    if (event.button !== 0) return;
 
-    const intersectionPoint = new THREE.Vector3();
-    if (raycaster.ray.intersectPlane(dragPlane, intersectionPoint)) {
-        // compute new world position (intersection - offset)
-        const newWorldPos = intersectionPoint.clone().sub(dragOffset);
-
-        // If selectedObject has parent transforms, convert world position to parent's local space
-        if (selectedObject.parent) {
-            const parentInv = new THREE.Matrix4().copy(selectedObject.parent.matrixWorld).invert();
-            newWorldPos.applyMatrix4(parentInv);
-        }
-        // only change X and Z to keep height stable
-        selectedObject.position.x = newWorldPos.x;
-        selectedObject.position.z = newWorldPos.z;
+    if(selectedObject === null)
+    {
+        return;
     }
+    isMovingSelectedObject = true;
+
+    selectedObjectLastPosition = selectedObject.position.clone();
+    selectedObjectLastQuaternion = selectedObject.rotation.clone();
 }
 
 function onPointerUp(event: PointerEvent) {
-    if (event.button !== 0) return;
-    isPointerDownForDrag = false;
-    selectedObject = null;
-    document.body.style.cursor = "auto";
+    if(isMovingSelectedObject)
+    {
+        if (event.button !== 0) return;
+        if(!selectedObject) return;
+        isMovingSelectedObject = false;
+
+        if(currentPlaceableObject == null)
+        {
+            selectedObject.position.copy(selectedObjectLastPosition);
+            selectedObject.rotation.copy(selectedObjectLastQuaternion);
+
+            recursiveUpdatePlaceableObject(selectedObject); 
+        }
+        else
+        {
+            removeObjOnPlaceableObject(selectedObject);
+            addObjOnPlaceableObject(currentPlaceableObject, selectedObject);
+        }
+
+        currentPlaceableObject = null;
+    }
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -242,6 +626,16 @@ function handleKeyDown(event: KeyboardEvent) {
         case "ShiftLeft":
             controls.moveDown = true;
             break;
+        case "KeyR":
+            pointerLockControls.lock();
+            break;
+        case "KeyF":
+            if(interactingObject)
+            {
+                let interactingData: InteractableUserData = interactingObject.userData.interactableData as InteractableUserData;
+                
+                interactingData.onInteract(interactingObject);
+            }
     }
 }
 
@@ -301,35 +695,29 @@ function animate() {
     deltaTime = clock.getDelta();
 
     lockCameraZeroMovement();
+    update();
+    updateUI();
 
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
 }
 
-function appendFloat32(current: Float32Array, add: Float32Array) {
-    var newArr = new Float32Array(current.length + add.length);
-    newArr.set(current, 0);
-    newArr.set(add, current.length);
-
-    return newArr;
-}
-function appendObj(
-    obj1: { verts: Float32Array; indexes: number[] },
-    obj2: { verts: Float32Array; indexes: number[] }
-) {
-    const verts = appendFloat32(obj1.verts, obj2.verts);
-    const indexes: number[] = [];
-    for (let i = 0; i < obj1.indexes.length; i++) {
-        indexes.push(obj1.indexes[i]);
-    }
-    for (let i = 0; i < obj2.indexes.length; i++) {
-        indexes.push(obj2.indexes[i]);
+function asGameObject(data: any): GameObjectData | null
+{
+    if (typeof data !== 'object' || data === null) {
+        return null;
     }
 
-    return {
-        verts,
-        indexes,
-    };
+    const hasRequiredKeys = 
+        'placeableData' in data && 
+        'selectableData' in data &&
+        'interactableData' in data;
+
+    if (!hasRequiredKeys) {
+        return null;
+    }
+
+    return data as GameObjectData;
 }
 
 init();
