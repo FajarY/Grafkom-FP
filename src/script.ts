@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { MathUtils } from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { loadGLTF, loadFBX, loadOBJ } from "./loader.js";
+import { loadAndPlaySound, playBackgroundMusic, setBGMVolume } from "./sound.js";
 
 type PlaceableUserData =
 {
@@ -64,6 +65,9 @@ let debugDiv: HTMLDivElement;
 let handCursorDiv: HTMLDivElement;
 let interactionPromptDiv: HTMLDivElement;
 let lockPromptDiv: HTMLDivElement;
+let crosshairDiv: HTMLDivElement;
+let bgmStarted = false;
+let isBGMMuted = false;
 
 async function init() {
     clock = new THREE.Clock();
@@ -103,6 +107,7 @@ async function init() {
     document.addEventListener("pointerup", onPointerUp);
 
     setupUI();
+    setupMusicUI();
 
     await setupKitchen();
 
@@ -197,6 +202,25 @@ function setupUI() {
     `;
 
     document.body.appendChild(lockPromptDiv);
+
+     crosshairDiv = document.createElement('div');
+    crosshairDiv.id = 'crosshair';
+    crosshairDiv.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 6px; 
+        height: 6px;
+        background-color: white;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        user-select: none;
+        z-index: 1000;
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.5); /* Supaya terlihat di background putih */
+    `;
+
+    document.body.appendChild(crosshairDiv);
 }
 
 function updateUI() {
@@ -258,6 +282,7 @@ Interacting: ${interactingName}
         }
 
         handCursorDiv.style.display = show ? 'block' : 'none';
+        crosshairDiv.style.display = show ? 'none' : 'block';
     }
     if(interactionPromptDiv)
     {
@@ -635,6 +660,7 @@ function handleKeyDown(event: KeyboardEvent) {
             break;
         case "KeyR":
             pointerLockControls.lock();
+            playBGM();
             break;
         case "KeyF":
             if(interactingObject)
@@ -725,6 +751,73 @@ function asGameObject(data: any): GameObjectData | null
     }
 
     return data as GameObjectData;
+}
+
+async function playBGM() {
+    if (!bgmStarted) {
+        await playBackgroundMusic('./sounds/testsound.mp3');  
+        setBGMVolume(0.2);
+        bgmStarted = true; 
+    }
+}
+
+function setupMusicUI() {
+    const container = document.createElement('div');
+    container.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        z-index: 2000;
+        user-select: none;
+    `;
+
+    const iconSoundOn = `
+        <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="18" fill="#ffffff">
+            <path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/>
+        </svg>`;
+
+    const iconSoundOff = `
+        <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="18" fill="#ffffff">
+            <path d="M792-56 671-177q-25 16-53 27.5T560-131v-82q14-5 27.5-10t25.5-12L480-368v208L280-360H120v-240h128L56-792l56-56 736 736-56 56Zm-8-232-58-58q17-31 25.5-65t8.5-70q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 53-14.5 102T784-288ZM650-422l-90-90v-130q47 22 73.5 66t26.5 96q0 15-2.5 29.5T650-422ZM480-592 280-392l-58-58 258-258v116Z"/>
+        </svg>`;
+
+    const btn = document.createElement('div');
+    btn.innerHTML = iconSoundOn; 
+    btn.style.cssText = `
+        width: 30px;
+        height: 30px;
+        background-color: #6b6359; /* Warna Coklat sesuai referensi */
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border: 2px solid rgba(255,255,255,0.2);
+        transition: transform 0.1s, background-color 0.2s;
+    `;
+
+    btn.addEventListener('click', async () => {
+        if (!bgmStarted) {
+            await playBGM(); 
+            isBGMMuted = false;
+            btn.innerHTML = iconSoundOn;
+            return;
+        }
+
+        if (isBGMMuted) {
+            setBGMVolume(0.2);
+            btn.innerHTML = iconSoundOn;
+            isBGMMuted = false;
+        } else {
+            setBGMVolume(0); 
+            btn.innerHTML = iconSoundOff;
+            isBGMMuted = true;
+        }
+    });
+
+    container.appendChild(btn);
+    document.body.appendChild(container);
 }
 
 init();
