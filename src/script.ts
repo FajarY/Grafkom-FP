@@ -302,12 +302,24 @@ async function setupKitchen()
     table.position.set(0.0, 0.5, 0.0);
     scene.add(table);
 
-    // const daging = await loadFBX("daging.fbx");
-    // daging.scale.setScalar(0.002);
-    // daging.position.set(-0.20, 1.05, -0.20);
-    // // daging.rotateX(MathUtils.degToRad(90.0));
-    // scene.add(daging);
-    // makeDraggable(daging);
+    const daging = await loadFBX("daging-kecil-banyak.fbx");
+    daging.scale.setScalar(0.002);
+    daging.position.set(-0.20, 1.05, -0.20);
+    // daging.rotateX(MathUtils.degToRad(90.0));
+    scene.add(daging);
+    makeDraggable(daging);
+    
+    // const ayamfilet = await loadGLTF("source/ayamfilet.glb");
+    // ayamfilet.scale.setScalar(0.8);
+    // ayamfilet.position.set(-0.20, 1.05, -0.20);
+    // scene.add(ayamfilet);
+    // makeDraggable(ayamfilet);
+
+    // const ayamdadu = await loadGLTF("source/ayamdadu.glb");
+    // ayamdadu.scale.setScalar(0.5);
+    // ayamdadu.position.set(-0.20, 1.05, -0.20);
+    // scene.add(ayamdadu);
+    // makeDraggable(ayamdadu);
 
     const knife = await loadGLTF("source/knife2.glb");
     knife.scale.setScalar(0.25);
