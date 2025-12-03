@@ -16,7 +16,8 @@ type AddPlaceableUserData =
 };
 type SelectedUserData =
 {
-    placedOn: THREE.Object3D | null;
+    placedOn: THREE.Object3D | null,
+    placeOffset: THREE.Vector3
 };
 type InteractableUserData = 
 {
@@ -25,10 +26,16 @@ type InteractableUserData =
 };
 type GameObjectData =
 {
+    typeId: string,
     placeableData: PlaceableUserData | null,
     selectableData: SelectedUserData | null,
     interactableData: InteractableUserData | null
 };
+type RecipeData = 
+{
+    ingridients: string[],
+    output: THREE.Object3D[]
+}
 
 const controls = {
     moveForward: false,
@@ -60,6 +67,7 @@ let selectedObjectLastPosition: THREE.Vector3;
 let selectedObjectLastQuaternion: THREE.Euler;
 let isMovingSelectedObject = false;
 let interactingObject: THREE.Object3D | null = null;
+let recipes: RecipeData[] = []; 
 
 let debugDiv: HTMLDivElement;
 let handCursorDiv: HTMLDivElement;
@@ -304,22 +312,21 @@ async function setupKitchen()
 
     const daging = await loadFBX("daging-kecil-banyak.fbx");
     daging.scale.setScalar(0.002);
-    daging.position.set(-0.20, 1.05, -0.20);
-    // daging.rotateX(MathUtils.degToRad(90.0));
+    daging.position.set(-0.20, 1.05 - 0.125, -0.20);
     scene.add(daging);
-    makeDraggable(daging);
+    makeDraggable(daging, new THREE.Vector3(0, -0.125, 0));
     
-    // const ayamfilet = await loadGLTF("source/ayamfilet.glb");
-    // ayamfilet.scale.setScalar(0.8);
-    // ayamfilet.position.set(-0.20, 1.05, -0.20);
-    // scene.add(ayamfilet);
-    // makeDraggable(ayamfilet);
+    const ayamfilet = await loadGLTF("source/ayamfilet.glb");
+    ayamfilet.scale.setScalar(0.8);
+    ayamfilet.position.set(-0.20, 1.05 + 0.1, -0.20);
+    scene.add(ayamfilet);
+    makeDraggable(ayamfilet, new THREE.Vector3(0, 0.1, 0));
 
-    // const ayamdadu = await loadGLTF("source/ayamdadu.glb");
-    // ayamdadu.scale.setScalar(0.5);
-    // ayamdadu.position.set(-0.20, 1.05, -0.20);
-    // scene.add(ayamdadu);
-    // makeDraggable(ayamdadu);
+    const ayamdadu = await loadGLTF("source/ayamdadu.glb");
+    ayamdadu.scale.setScalar(0.5);
+    ayamdadu.position.set(-0.20, 1.05, -0.20);
+    scene.add(ayamdadu);
+    makeDraggable(ayamdadu);
 
     const knife = await loadGLTF("source/knife2.glb");
     knife.scale.setScalar(0.25);
@@ -347,12 +354,17 @@ async function setupKitchen()
         interactInfo: "interact with Plate",
         onInteract: (obj) =>
         {
-            console.log(obj)
+            runRecipeLogic();
         }
     })
 
     addObjOnPlaceableObject(table, knife);
     addObjOnPlaceableObject(table, plateSingle);
+}
+
+function runRecipeLogic()
+{
+    
 }
 
 function addHelperGrid() {
@@ -435,6 +447,7 @@ function checkRaycast()
         }
 
         let selectedGoPosition = camera.position.clone().add(cameraDirection.multiplyScalar(1.0));
+        selectedGoPosition.add(selectedObject.userData.selectableData.placeOffset);
 
         raycaster.set(camera.position, cameraDirection);
         const placeableIntersects = raycaster.intersectObjects(placeableObjects, true);
@@ -466,6 +479,7 @@ function checkRaycast()
             selectedGoPosition.y = currentPlaceableObject.position.y;
 
             selectedGoPosition.add(currentPlaceableObject.userData.placeableData.placeOffset);
+            selectedGoPosition.add(selectedObject.userData.selectableData.placeOffset);
         }
 
         selectedObject?.position.set(selectedGoPosition.x, selectedGoPosition.y, selectedGoPosition.z);
@@ -528,32 +542,45 @@ function recursiveUpdatePlaceableObject(placeableObj: THREE.Object3D)
     }
 }
 
-function makeDraggable(obj: THREE.Object3D) {
+function makeDraggable(obj: THREE.Object3D, offsetPlace: THREE.Vector3 = new THREE.Vector3(0, 0, 0), newTypeId: string | undefined = undefined) {
     draggableObjects.push(obj);
 
     let gameObj = asGameObject(obj.userData);
     if(!gameObj)
     {
+        if(!newTypeId)
+        {
+            throw new Error("New registered gameObj must have newTypeData not be undefined")
+        }
+
         gameObj = {
+            typeId: newTypeId,
             placeableData: null,
             selectableData: null,
             interactableData: null
         };
     }
     gameObj.selectableData = {
-        placedOn: null
+        placedOn: null,
+        placeOffset: offsetPlace
     };
 
     obj.userData = gameObj;
 }
 
-function makePlacable(obj: THREE.Object3D, data: AddPlaceableUserData)
+function makePlacable(obj: THREE.Object3D, data: AddPlaceableUserData, newTypeId: string | undefined = undefined)
 {
     placeableObjects.push(obj);
     let gameObj = asGameObject(obj.userData);
     if(!gameObj)
     {
+        if(!newTypeId)
+        {
+            throw new Error("New registered gameObj must have newTypeData not be undefined")
+        }
+
         gameObj = {
+            typeId: newTypeId,
             placeableData: null,
             selectableData: null,
             interactableData: null
@@ -569,14 +596,20 @@ function makePlacable(obj: THREE.Object3D, data: AddPlaceableUserData)
     obj.userData = gameObj;
 }
 
-function makeInteractable(obj: THREE.Object3D, data: InteractableUserData)
+function makeInteractable(obj: THREE.Object3D, data: InteractableUserData, newTypeId: string | undefined = undefined)
 {
     interactableObjects.push(obj);
 
     let gameObj = asGameObject(obj.userData);
     if(!gameObj)
     {
+        if(!newTypeId)
+        {
+            throw new Error("New registered gameObj must have newTypeData not be undefined")
+        }
+
         gameObj = {
+            typeId: newTypeId,
             placeableData: null,
             selectableData: null,
             interactableData: null
