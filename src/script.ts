@@ -651,7 +651,6 @@ function checkRaycast()
         const placeableIntersects = raycaster.intersectObjects(placeableObjects, true);
 
         const ignoreId = getAllChildsSet(selectedObject);
-        console.log(ignoreId);
 
         currentPlaceableObject = null;
         let currentIntersectIndex = 0;
