@@ -33,8 +33,19 @@ type GameObjectData =
 };
 type RecipeData = 
 {
-    ingridients: string[],
-    output: THREE.Object3D[]
+    ingredients: IngredientData[],
+    output: OutputRecipeData[]
+}
+type IngredientData = 
+{
+    typeId: string,
+    minimumCount: number,
+    useCount: number
+}
+type OutputRecipeData =
+{
+    obj: (interactable: THREE.Object3D) => Promise<THREE.Object3D>,
+    placeOffset: THREE.Vector3
 }
 
 const controls = {
@@ -305,66 +316,185 @@ Interacting: ${interactingName}
 
 async function setupKitchen()
 {
-    const table = await loadFBX("table.fbx");
-    table.scale.setScalar(0.01);
-    table.position.set(0.0, 0.5, 0.0);
+    const table = await loadGLTF("meja.glb");
+    table.scale.setScalar(1);
+    table.position.set(0.0, 0.85, 0.0);
     scene.add(table);
 
     const daging = await loadFBX("daging-kecil-banyak.fbx");
     daging.scale.setScalar(0.002);
-    daging.position.set(-0.20, 1.05 - 0.125, -0.20);
+    daging.position.set(-0.20, 0, -0.20);
     scene.add(daging);
     makeDraggable(daging, new THREE.Vector3(0, -0.125, 0), "daging-kecil");
     
     const ayamfilet = await loadGLTF("source/ayamfilet.glb");
-    ayamfilet.scale.setScalar(0.8);
-    ayamfilet.position.set(-0.20, 1.05 + 0.1, -0.20);
+    ayamfilet.scale.setScalar(0.6);
+    ayamfilet.position.set(-0.20, 0, -0.20);
     scene.add(ayamfilet);
     makeDraggable(ayamfilet, new THREE.Vector3(0, 0.1, 0), "ayam-filet");
 
     const ayamdadu = await loadGLTF("source/ayamdadu.glb");
     ayamdadu.scale.setScalar(0.5);
-    ayamdadu.position.set(-0.20, 1.05, -0.20);
+    ayamdadu.position.set(-0.20, 0, -0.20);
     scene.add(ayamdadu);
     makeDraggable(ayamdadu, new THREE.Vector3(), "ayam-dadu");
 
-    const knife = await loadGLTF("source/knife2.glb");
-    knife.scale.setScalar(0.25);
-    knife.position.set(0.20, 1.05, -0.20);
+    const knife = await loadGLTF("pisau.glb");
+    knife.scale.setScalar(1);
+    knife.position.set(0.20, 0, -0.20);
     knife.rotateX(MathUtils.degToRad(90.0));
     knife.rotateZ(MathUtils.degToRad(30.0));
     scene.add(knife);
-    makeDraggable(knife, new THREE.Vector3(), "pisau");
+    makeDraggable(knife, new THREE.Vector3(0, 0.085), "pisau");
 
-    const plate = await loadGLTF("ceramic_plate_set.glb");
-    const plateSingle = plate.children[0].children[0].children[0].children[1];
-    plateSingle.scale.setScalar(2);
-    plateSingle.position.set(-0.20, 1.05, 0.50);
+    const plate = await loadGLTF("piring.glb");
+    const plateSingle = plate;
+    plateSingle.scale.setScalar(1);
+    plateSingle.position.set(-0.20, 0, 0.50);
     scene.add(plateSingle);
-    makeDraggable(plateSingle, new THREE.Vector3(), "piring");
+    makeDraggable(plateSingle, new THREE.Vector3(0, 0.05), "piring");
     makePlacable(plateSingle, {
-        placeOffset: new THREE.Vector3(0.0, 0.025, 0.0)
+        placeOffset: new THREE.Vector3(0.0, 0, 0.0)
     })
 
     makePlacable(table, {
-        placeOffset: new THREE.Vector3(0.0, 0.535, 0.0),
+        placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
     }, "meja");
 
     makeInteractable(plateSingle, {
         interactInfo: "interact with Plate",
-        onInteract: (obj) =>
+        onInteract: async (obj) =>
         {
-            runRecipeLogic();
+            await runRecipeLogic(obj);
         }
     })
 
     addObjOnPlaceableObject(table, knife);
     addObjOnPlaceableObject(table, plateSingle);
+    addObjOnPlaceableObject(table, ayamfilet);
+    addObjOnPlaceableObject(table, ayamdadu);
+    addObjOnPlaceableObject(table, daging);
+
+    setupRecipe();
 }
 
-function runRecipeLogic()
+async function setupRecipe()
 {
-    
+    recipes.push({
+        ingredients: [
+            {
+                typeId: 'ayam-filet',
+                minimumCount: 1,
+                useCount: 0
+            },
+            {
+                typeId: 'pisau',
+                minimumCount: 1,
+                useCount: 0
+            }
+        ],
+        output: [
+            {
+                async obj(interactable) {
+                    const ayamdadu = await loadGLTF("source/ayamdadu.glb");
+                    ayamdadu.scale.setScalar(0.5);
+                    scene.add(ayamdadu);
+                    makeDraggable(ayamdadu, new THREE.Vector3(), "ayam-dadu");
+
+                    return ayamdadu
+                },
+                placeOffset: new THREE.Vector3(0, 0, 0)
+            }
+        ]
+    });
+}
+
+async function runRecipeLogic(obj: THREE.Object3D)
+{
+    const gameObjData: GameObjectData = obj.userData as GameObjectData;
+    const placeableData: PlaceableUserData = gameObjData.placeableData!!;
+
+    const objectsInPlace = new Map();
+    for(let i = 0; i < placeableData.placedObject.length; i++)
+    {
+        const otherGameObj: GameObjectData = placeableData.placedObject[i].userData as GameObjectData;
+
+        const count : number | undefined = objectsInPlace.get(otherGameObj.typeId);
+        if(count === undefined)
+        {
+            objectsInPlace.set(otherGameObj.typeId, 1);
+        }
+        else
+        {
+            objectsInPlace.set(otherGameObj.typeId, count + 1);
+        }
+    }
+
+    let found: boolean = false;
+    for(let i = 0; i < recipes.length; i++)
+    {
+        const recipe: RecipeData = recipes[i];
+
+        if(recipe.ingredients.length != objectsInPlace.size)
+        {
+            continue;
+        }
+
+        let invalid: boolean = false;
+        for(let j = 0; j < recipe.ingredients.length; j++)
+        {
+            const ingredientNum = objectsInPlace.get(recipe.ingredients[j].typeId);
+
+            if(ingredientNum === undefined)
+            {
+                invalid = true;
+                break;
+            }
+            if(ingredientNum < recipe.ingredients[j].minimumCount)
+            {
+                invalid = true;
+                break;
+            }
+        }
+
+        if(!invalid)
+        {
+            found = true;
+            
+            for(let j = 0; j < recipe.ingredients.length; j++)
+            {
+                const ingredient = recipe.ingredients[j];
+
+                for(let k = 0; k < ingredient.useCount; k++)
+                {
+                    for(let a = 0; a < placeableData.placedObject.length; a++)
+                    {
+                        const otherGameObj: GameObjectData = placeableData.placedObject[a].userData as GameObjectData;
+
+                        if(otherGameObj.typeId == ingredient.typeId)
+                        {
+                            scene.remove(placeableData.placedObject[a]);
+                            removeObjOnPlaceableObject(placeableData.placedObject[a]);
+                            break;
+                        }
+                    }
+                }
+            }
+            for(let j = 0; j < recipe.output.length; j++)
+            {
+                const spawnedObj = await recipe.output[j].obj(obj);
+                const spawnPos = obj.position.clone();
+                const spawnOffset = recipe.output[j].placeOffset;
+                spawnPos.add(spawnOffset);
+                spawnPos.add(placeableData.placeOffset);
+                
+                spawnedObj.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+                addObjOnPlaceableObject(obj, spawnedObj);
+            }
+
+            break;
+        }
+    }
 }
 
 function addHelperGrid() {
@@ -497,6 +627,13 @@ function addObjOnPlaceableObject(placeableObj: THREE.Object3D, obj: THREE.Object
     }
 
     let newPlacedOnData : PlaceableUserData = placeableObj.userData.placeableData as PlaceableUserData;
+
+    const placePos : THREE.Vector3 = obj.position.clone();
+    placePos.set(placePos.x, placeableObj.position.y, placePos.z);
+    placePos.add(selectedData.placeOffset);
+    placePos.add(newPlacedOnData.placeOffset);
+
+    obj.position.set(placePos.x, placePos.y, placePos.z);
 
     newPlacedOnData.placedObject.push(obj);
     newPlacedOnData.lastPlaceObjectPos.push(obj.position.clone().sub(placeableObj.position.clone()));
