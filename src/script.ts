@@ -357,6 +357,18 @@ async function setupKitchen()
         placeOffset: new THREE.Vector3(0.0, 0, 0.0)
     })
 
+    const lettuce = await loadGLTF("source/kubis.glb");
+    lettuce.scale.setScalar(0.03);
+    lettuce.position.set(0.30, 0, 0.60);
+    scene.add(lettuce);
+    makeDraggable(lettuce, new THREE.Vector3(), "kubis");
+
+    const lettuce_cuts = await loadGLTF("source/kubis-potong.glb");
+    lettuce_cuts.scale.setScalar(0.03);
+    lettuce_cuts.position.set(0.10, 0, 0.40);
+    scene.add(lettuce_cuts);
+    makeDraggable(lettuce_cuts, new THREE.Vector3(), "kubis-potong");
+
     makePlacable(table, {
         placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
     }, "meja");
