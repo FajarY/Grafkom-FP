@@ -35,6 +35,7 @@ type RecipeData =
 {
     ingredients: IngredientData[],
     output: OutputRecipeData[],
+    successSoundPath: string
 }
 type IngredientData = 
 {
@@ -106,11 +107,11 @@ async function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    const ambientLight = new THREE.AmbientLight(0x888888);
     scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(5, 5, 5);
+    directionalLight.position.set(0, 10, 0);
     scene.add(directionalLight);
 
     addHelperGrid();
@@ -355,7 +356,19 @@ async function setupKitchen()
     makeDraggable(plateSingle, new THREE.Vector3(0, 0.05), "piring");
     makePlacable(plateSingle, {
         placeOffset: new THREE.Vector3(0.0, 0, 0.0)
-    });
+    })
+
+    const lettuce = await loadGLTF("source/kubis.glb");
+    lettuce.scale.setScalar(0.03);
+    lettuce.position.set(0.30, 0, 0.60);
+    scene.add(lettuce);
+    makeDraggable(lettuce, new THREE.Vector3(), "kubis");
+
+    const lettuce_cuts = await loadGLTF("source/kubis-potong.glb");
+    lettuce_cuts.scale.setScalar(0.03);
+    lettuce_cuts.position.set(0.10, 0, 0.40);
+    scene.add(lettuce_cuts);
+    makeDraggable(lettuce_cuts, new THREE.Vector3(), "kubis-potong");
 
     const talenan = await loadGLTF("talenan.glb");
     talenan.scale.setScalar(1);
@@ -384,6 +397,8 @@ async function setupKitchen()
     addObjOnPlaceableObject(table, ayamdadu);
     addObjOnPlaceableObject(table, daging);
     addObjOnPlaceableObject(table, talenan);
+    addObjOnPlaceableObject(table, lettuce);
+    addObjOnPlaceableObject(table, lettuce_cuts);
 
     setupRecipe();
 }
@@ -415,8 +430,40 @@ async function setupRecipe()
                 },
                 placeOffset: new THREE.Vector3(0, 0, 0)
             }
-        ]
-    });
+        ],
+        successSoundPath: ''
+    },
+
+    {
+        ingredients: [
+            {
+                typeId: 'kubis',
+                minimumCount: 1,
+                useCount: 0
+            },
+            {
+                typeId: 'pisau',
+                minimumCount: 1,
+                useCount: 0
+            }
+        ],
+        output: [
+            {
+                async obj(interactable) {
+                    const lettuce_cuts = await loadGLTF("source/kubis-potong.glb");
+                    lettuce_cuts.scale.setScalar(0.03);
+                    lettuce_cuts.position.set(0.10, 0, 0.40);
+                    scene.add(lettuce_cuts);
+                    makeDraggable(lettuce_cuts, new THREE.Vector3(), "kubis-potong");
+
+                    return lettuce_cuts
+                },
+                placeOffset: new THREE.Vector3(0, 0, 0)
+            }
+        ],
+        successSoundPath: ''
+    }
+    );
 }
 
 async function runRecipeLogic(obj: THREE.Object3D)
@@ -440,7 +487,8 @@ async function runRecipeLogic(obj: THREE.Object3D)
         }
     }
 
-    let found: boolean = false;
+    let successRecipe: RecipeData | undefined = undefined;
+
     for(let i = 0; i < recipes.length; i++)
     {
         const recipe: RecipeData = recipes[i];
@@ -469,7 +517,7 @@ async function runRecipeLogic(obj: THREE.Object3D)
 
         if(!invalid)
         {
-            found = true;
+            successRecipe = recipe;
             
             for(let j = 0; j < recipe.ingredients.length; j++)
             {
@@ -506,9 +554,10 @@ async function runRecipeLogic(obj: THREE.Object3D)
         }
     }
 
-    if(found)
+    if(successRecipe)
     {
         //Play Success Sound
+        //successRecipe.successSoundPath;
     }
     else
     {
@@ -601,6 +650,9 @@ function checkRaycast()
         raycaster.set(camera.position, cameraDirection);
         const placeableIntersects = raycaster.intersectObjects(placeableObjects, true);
 
+        const ignoreId = getAllChildsSet(selectedObject);
+        console.log(ignoreId);
+
         currentPlaceableObject = null;
         let currentIntersectIndex = 0;
         for(let i = 0; i < placeableIntersects.length; i++)
@@ -608,12 +660,16 @@ function checkRaycast()
             currentIntersectIndex = i;
             const currentIntersectRay = placeableIntersects[i];
             const chooseObj = findTopPlaceableAncestor(currentIntersectRay.object);
-
+            
             if(currentIntersectRay.point.distanceTo(camera.position) > maxPlaceableObjDistance)
             {
                 continue;
             }
             if(chooseObj.id == selectedObject?.id)
+            {
+                continue;
+            }
+            if(ignoreId.has(chooseObj.id))
             {
                 continue;
             }
@@ -635,6 +691,30 @@ function checkRaycast()
 
         recursiveUpdatePlaceableObject(selectedObject);
     }
+}
+
+function getAllChildsSet(obj: THREE.Object3D) : Set<number>
+{
+    const set = new Set<number>();
+    const gameObj : GameObjectData = obj.userData as GameObjectData;
+
+    if(gameObj.placeableData)
+    {
+        const placeData = gameObj.placeableData;
+
+        for(let i = 0; i < placeData.placedObject.length; i++)
+        {
+            const childSet = getAllChildsSet(placeData.placedObject[i]);
+            set.add(placeData.placedObject[i].id);
+
+            for(const id of childSet)
+            {
+                set.add(id);
+            }
+        }
+    }
+
+    return set;
 }
 
 function addObjOnPlaceableObject(placeableObj: THREE.Object3D, obj: THREE.Object3D)
