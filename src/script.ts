@@ -34,7 +34,7 @@ type GameObjectData =
 type RecipeData = 
 {
     ingredients: IngredientData[],
-    output: OutputRecipeData[]
+    output: OutputRecipeData[],
 }
 type IngredientData = 
 {
@@ -355,25 +355,35 @@ async function setupKitchen()
     makeDraggable(plateSingle, new THREE.Vector3(0, 0.05), "piring");
     makePlacable(plateSingle, {
         placeOffset: new THREE.Vector3(0.0, 0, 0.0)
-    })
+    });
 
-    makePlacable(table, {
-        placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
-    }, "meja");
+    const talenan = await loadGLTF("talenan.glb");
+    talenan.scale.setScalar(1);
+    talenan.position.set(0.5, 0, 0.25);
+    scene.add(talenan);
 
-    makeInteractable(plateSingle, {
-        interactInfo: "interact with Plate",
+    makeDraggable(talenan, new THREE.Vector3(0.0, 0.015), "talenan");
+    makePlacable(talenan, {
+        placeOffset: new THREE.Vector3()
+    });
+    makeInteractable(talenan, {
+        interactInfo: "interact with Talenan",
         onInteract: async (obj) =>
         {
             await runRecipeLogic(obj);
         }
     })
 
+    makePlacable(table, {
+        placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
+    }, "meja");
+
     addObjOnPlaceableObject(table, knife);
     addObjOnPlaceableObject(table, plateSingle);
     addObjOnPlaceableObject(table, ayamfilet);
     addObjOnPlaceableObject(table, ayamdadu);
     addObjOnPlaceableObject(table, daging);
+    addObjOnPlaceableObject(table, talenan);
 
     setupRecipe();
 }
@@ -494,6 +504,15 @@ async function runRecipeLogic(obj: THREE.Object3D)
 
             break;
         }
+    }
+
+    if(found)
+    {
+        //Play Success Sound
+    }
+    else
+    {
+        //Play Fail
     }
 }
 
