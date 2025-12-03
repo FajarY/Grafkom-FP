@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MathUtils } from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { loadGLTF, loadFBX, loadOBJ } from "./loader.js";
-import { loadAndPlaySound, playBackgroundMusic, setBGMVolume } from "./sound.js";
+import { playSoundLoopForDuration, loadAndPlaySound, playBackgroundMusic, setBGMVolume } from "./sound.js";
 
 type PlaceableUserData =
 {
@@ -88,6 +88,7 @@ let lockPromptDiv: HTMLDivElement;
 let crosshairDiv: HTMLDivElement;
 let bgmStarted = false;
 let isBGMMuted = false;
+let failedSoundPath = './sounds/invalid-combination.mp3'
 
 async function init() {
     clock = new THREE.Clock();
@@ -431,7 +432,7 @@ async function setupRecipe()
                 placeOffset: new THREE.Vector3(0, 0, 0)
             }
         ],
-        successSoundPath: ''
+        successSoundPath: './sounds/chop.mp3'
     },
 
     {
@@ -461,7 +462,7 @@ async function setupRecipe()
                 placeOffset: new THREE.Vector3(0, 0, 0)
             }
         ],
-        successSoundPath: ''
+        successSoundPath: './sounds/chop.mp3'
     }
     );
 }
@@ -556,12 +557,13 @@ async function runRecipeLogic(obj: THREE.Object3D)
 
     if(successRecipe)
     {
-        //Play Success Sound
-        //successRecipe.successSoundPath;
+        if (successRecipe.successSoundPath && successRecipe.successSoundPath !== '') {
+            loadAndPlaySound(successRecipe.successSoundPath, 0.8); 
+        }
     }
     else
     {
-        //Play Fail
+        loadAndPlaySound(failedSoundPath, 0.6);
     }
 }
 
