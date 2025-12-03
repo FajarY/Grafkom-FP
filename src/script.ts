@@ -314,19 +314,19 @@ async function setupKitchen()
     daging.scale.setScalar(0.002);
     daging.position.set(-0.20, 1.05 - 0.125, -0.20);
     scene.add(daging);
-    makeDraggable(daging, new THREE.Vector3(0, -0.125, 0));
+    makeDraggable(daging, new THREE.Vector3(0, -0.125, 0), "daging-kecil");
     
     const ayamfilet = await loadGLTF("source/ayamfilet.glb");
     ayamfilet.scale.setScalar(0.8);
     ayamfilet.position.set(-0.20, 1.05 + 0.1, -0.20);
     scene.add(ayamfilet);
-    makeDraggable(ayamfilet, new THREE.Vector3(0, 0.1, 0));
+    makeDraggable(ayamfilet, new THREE.Vector3(0, 0.1, 0), "ayam-filet");
 
     const ayamdadu = await loadGLTF("source/ayamdadu.glb");
     ayamdadu.scale.setScalar(0.5);
     ayamdadu.position.set(-0.20, 1.05, -0.20);
     scene.add(ayamdadu);
-    makeDraggable(ayamdadu);
+    makeDraggable(ayamdadu, new THREE.Vector3(), "ayam-dadu");
 
     const knife = await loadGLTF("source/knife2.glb");
     knife.scale.setScalar(0.25);
@@ -334,21 +334,21 @@ async function setupKitchen()
     knife.rotateX(MathUtils.degToRad(90.0));
     knife.rotateZ(MathUtils.degToRad(30.0));
     scene.add(knife);
-    makeDraggable(knife);
+    makeDraggable(knife, new THREE.Vector3(), "pisau");
 
     const plate = await loadGLTF("ceramic_plate_set.glb");
     const plateSingle = plate.children[0].children[0].children[0].children[1];
     plateSingle.scale.setScalar(2);
     plateSingle.position.set(-0.20, 1.05, 0.50);
     scene.add(plateSingle);
-    makeDraggable(plateSingle);
+    makeDraggable(plateSingle, new THREE.Vector3(), "piring");
     makePlacable(plateSingle, {
         placeOffset: new THREE.Vector3(0.0, 0.025, 0.0)
     })
 
     makePlacable(table, {
         placeOffset: new THREE.Vector3(0.0, 0.535, 0.0),
-    });
+    }, "meja");
 
     makeInteractable(plateSingle, {
         interactInfo: "interact with Plate",
