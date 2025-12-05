@@ -1,8 +1,31 @@
 const soundCache = new Map<string, AudioBuffer>();
 const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
+const soundAssets: string[] = [
+    './sounds/boiling-water-loop.mp3',
+    './sounds/chop.mp3',
+    './sounds/deepfry-loop.mp3',
+    './sounds/invalid-combination.mp3',
+    './sounds/testsound.mp3' 
+];
+
 let bgmSource: AudioBufferSourceNode | null = null;
 let bgmGainNode: GainNode | null = null;
+
+export async function preloadSoundAssets(): Promise<void> {
+    const promises = soundAssets.map(async (url) => {
+        if (!soundCache.has(url)) {
+            try {
+                const audioBuffer = await loadSound(url);
+                soundCache.set(url, audioBuffer);
+            } catch (error) {
+                console.error(`Failed to preload sound: ${url}`, error);
+            }
+        }
+    });
+
+    await Promise.all(promises);
+}
 
 async function loadSound(url: string): Promise<AudioBuffer> {
     const response = await fetch(url);

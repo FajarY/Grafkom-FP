@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MathUtils } from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { loadGLTF, loadFBX, loadOBJ } from "./loader.js";
-import { playSoundLoopForDuration, loadAndPlaySound, playBackgroundMusic, setBGMVolume } from "./sound.js";
+import { preloadSoundAssets, playSoundLoopForDuration, loadAndPlaySound, playBackgroundMusic, setBGMVolume } from "./sound.js";
 
 type PlaceableUserData =
 {
@@ -131,6 +131,7 @@ async function init() {
     setupMusicUI();
 
     await setupKitchen();
+    await preloadSoundAssets();
 
     animate();
 }
