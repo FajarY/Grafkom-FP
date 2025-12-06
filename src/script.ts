@@ -324,6 +324,11 @@ async function setupKitchen()
     table.position.set(0.0, 0.85, 0.0);
     scene.add(table);
 
+    const stove = await loadGLTF("stove.glb");
+    stove.scale.setScalar(1);
+    stove.position.set(-1.0, 0.20, 2.0);
+    scene.add(stove);
+
     const daging = await loadFBX("daging-kecil-banyak.fbx");
     daging.scale.setScalar(0.002);
     daging.position.set(-0.20, 0, -0.20);
@@ -366,6 +371,12 @@ async function setupKitchen()
     scene.add(lettuce);
     makeDraggable(lettuce, new THREE.Vector3(), "kubis");
 
+    // const fire = await loadGLTF("api-kompor.glb");
+    // fire.scale.setScalar(1);
+    // fire.position.set(0.30, 0, 0.60);
+    // scene.add(fire);
+    // makeDraggable(fire, new THREE.Vector3(), "api");
+
     const lettuce_cuts = await loadGLTF("source/kubis-potong.glb");
     lettuce_cuts.scale.setScalar(0.03);
     lettuce_cuts.position.set(0.10, 0, 0.40);
@@ -381,6 +392,7 @@ async function setupKitchen()
     makePlacable(talenan, {
         placeOffset: new THREE.Vector3()
     });
+
     makeInteractable(talenan, {
         interactInfo: "interact with Talenan",
         onInteract: async (obj) =>
@@ -392,6 +404,10 @@ async function setupKitchen()
     makePlacable(table, {
         placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
     }, "meja");
+
+    makePlacable(stove, {
+        placeOffset: new THREE.Vector3(0.0, 0.0225, 0.0),
+    }, "kompor");
 
     addObjOnPlaceableObject(table, knife);
     addObjOnPlaceableObject(table, plateSingle);
