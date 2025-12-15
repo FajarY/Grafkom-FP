@@ -108,7 +108,7 @@ async function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x888888);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -325,31 +325,31 @@ async function setupKitchen()
     scene.add(table);
 
     const stove = await loadGLTF("stove.glb");
-    stove.scale.setScalar(1);
-    stove.position.set(-1.0, 0.20, 2.0);
+    stove.scale.setScalar(1.5);
+    stove.position.set(-3.0, 0.20, 2.0);
     scene.add(stove);
 
     const daging = await loadFBX("daging-kecil-banyak.fbx");
     daging.scale.setScalar(0.002);
-    daging.position.set(-0.20, 0, -0.20);
+    daging.position.set(-0.50, 1.0, -0.20);
     scene.add(daging);
     makeDraggable(daging, new THREE.Vector3(0, -0.125, 0), "daging-kecil");
     
     const ayamfilet = await loadGLTF("source/ayamfilet.glb");
     ayamfilet.scale.setScalar(0.6);
-    ayamfilet.position.set(-0.20, 0, -0.20);
+    ayamfilet.position.set(-0.20, 1.0, -0.50);
     scene.add(ayamfilet);
     makeDraggable(ayamfilet, new THREE.Vector3(0, 0.1, 0), "ayam-filet");
 
     const ayamdadu = await loadGLTF("source/ayamdadu.glb");
     ayamdadu.scale.setScalar(0.5);
-    ayamdadu.position.set(-0.20, 0, -0.20);
+    ayamdadu.position.set(0.10, 1.0, -0.20);
     scene.add(ayamdadu);
     makeDraggable(ayamdadu, new THREE.Vector3(), "ayam-dadu");
 
     const knife = await loadGLTF("pisau.glb");
     knife.scale.setScalar(1);
-    knife.position.set(0.20, 0, -0.20);
+    knife.position.set(0.20, 1.0, -0.20);
     knife.rotateX(MathUtils.degToRad(90.0));
     knife.rotateZ(MathUtils.degToRad(30.0));
     scene.add(knife);
@@ -358,7 +358,7 @@ async function setupKitchen()
     const plate = await loadGLTF("piring.glb");
     const plateSingle = plate;
     plateSingle.scale.setScalar(1);
-    plateSingle.position.set(-0.20, 0, 0.50);
+    plateSingle.position.set(-0.20, 1.0, 0.50);
     scene.add(plateSingle);
     makeDraggable(plateSingle, new THREE.Vector3(0, 0.05), "piring");
     makePlacable(plateSingle, {
@@ -367,7 +367,7 @@ async function setupKitchen()
 
     const lettuce = await loadGLTF("source/kubis.glb");
     lettuce.scale.setScalar(0.03);
-    lettuce.position.set(0.30, 0, 0.60);
+    lettuce.position.set(0.50, 1.0, 0.30);
     scene.add(lettuce);
     makeDraggable(lettuce, new THREE.Vector3(), "kubis");
 
@@ -379,14 +379,47 @@ async function setupKitchen()
 
     const lettuce_cuts = await loadGLTF("source/kubis-potong.glb");
     lettuce_cuts.scale.setScalar(0.03);
-    lettuce_cuts.position.set(0.10, 0, 0.40);
+    lettuce_cuts.position.set(0.50, 1.0, -0.10);
     scene.add(lettuce_cuts);
     makeDraggable(lettuce_cuts, new THREE.Vector3(), "kubis-potong");
 
+    const kacangpanjang = await loadGLTF("kacangpanjang.glb");
+    kacangpanjang.scale.setScalar(0.08);
+    kacangpanjang.position.set(-0.50, 1.0, 0.30);
+    scene.add(kacangpanjang);
+    makeDraggable(kacangpanjang, new THREE.Vector3(), "kacang-panjang");
+
     const talenan = await loadGLTF("talenan.glb");
     talenan.scale.setScalar(1);
-    talenan.position.set(0.5, 0, 0.25);
+    talenan.position.set(0.5, 1.0, 0.25);
     scene.add(talenan);
+
+    // Background
+
+    const tree1 = await loadGLTF("mangga_pohon.glb");
+    tree1.scale.setScalar(0.5);
+    tree1.position.set(-3.0, 0.0, -3.0);
+    scene.add(tree1);
+    
+    const tree2 = await loadGLTF("alt_mangga_pohon.glb");
+    tree2.scale.setScalar(0.5);
+    tree2.position.set(3.0, 0.0, -3.0);
+    scene.add(tree2);
+
+    const mountain1 = await loadFBX("gunung.fbx");
+    mountain1.scale.setScalar(0.2);
+    mountain1.position.set(50.0, 0.0, -10.0);
+    scene.add(mountain1);
+
+    const mountain2 = await loadFBX("gunung.fbx");
+    mountain2.scale.setScalar(0.2);
+    mountain2.position.set(-100.0, 0.0, 0.0);
+    scene.add(mountain2);
+
+    const mountain3 = await loadFBX("gunung.fbx");
+    mountain3.scale.setScalar(0.25);
+    mountain3.position.set(-20.0, -0.5, 115.0);
+    scene.add(mountain3);
 
     makeDraggable(talenan, new THREE.Vector3(0.0, 0.015), "talenan");
     makePlacable(talenan, {
@@ -417,6 +450,9 @@ async function setupKitchen()
     addObjOnPlaceableObject(table, talenan);
     addObjOnPlaceableObject(table, lettuce);
     addObjOnPlaceableObject(table, lettuce_cuts);
+    addObjOnPlaceableObject(table, kacangpanjang);
+    
+    console.log("Total objects in scene:", scene.children.length);
 
     setupRecipe();
 }
@@ -590,7 +626,7 @@ function addHelperGrid() {
     const colorGrid = 0x888888;
 
     const gridXZ = new THREE.GridHelper(size, divisions, colorGrid, colorGrid);
-    (gridXZ.material as THREE.Material).opacity = 0.3;
+    (gridXZ.material as THREE.Material).opacity = 0;
     (gridXZ.material as THREE.Material).transparent = true;
     scene.add(gridXZ);
 
