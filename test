@@ -1,0 +1,11 @@
+=MAP(A4:A, LAMBDA(i, 
+  IF(i = "", "", 
+    IF(i > ($E$2 - $E$1), 
+      "", 
+      IF(i <= $E$1, 
+        AVERAGE(OFFSET($B$4, 0, 0, 2*i - 1, 1)), 
+        AVERAGE(OFFSET($B$4, i - $E$1 - 1, 0, 2*$E$1 + 1, 1))
+      )
+    )
+  )
+))
