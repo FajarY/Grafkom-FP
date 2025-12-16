@@ -371,6 +371,18 @@ async function setupKitchen()
     scene.add(lettuce);
     makeDraggable(lettuce, new THREE.Vector3(), "kubis");
 
+    const coconut_flakes = await loadGLTF("coconut-flakes.glb");
+    coconut_flakes.scale.setScalar(0.05);
+    coconut_flakes.position.set(0.50, 1.0, 0.30);
+    scene.add(coconut_flakes);
+    makeDraggable(coconut_flakes, new THREE.Vector3(), "coconut-flakes");
+
+    const parutan = await loadGLTF("parutan-kelapa.glb");
+    parutan.scale.setScalar(0.02);
+    parutan.position.set(0.50, 1.0, 0.30);
+    scene.add(parutan);
+    makeDraggable(parutan, new THREE.Vector3(), "parutan-kelapa");
+
     // const fire = await loadGLTF("api-kompor.glb");
     // fire.scale.setScalar(1);
     // fire.position.set(0.30, 0, 0.60);
